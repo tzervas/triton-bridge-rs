@@ -62,6 +62,11 @@ struct Fns {
         *mut *mut c_void,
     ) -> CUresult,
     cu_get_error_string: unsafe extern "C" fn(CUresult, *mut *const c_char) -> CUresult,
+    cu_mem_alloc: unsafe extern "C" fn(*mut CUdeviceptr, usize) -> CUresult,
+    cu_mem_free: unsafe extern "C" fn(CUdeviceptr) -> CUresult,
+    cu_memcpy_htod: unsafe extern "C" fn(CUdeviceptr, *const c_void, usize) -> CUresult,
+    cu_memcpy_dtoh: unsafe extern "C" fn(*mut c_void, CUdeviceptr, usize) -> CUresult,
+    cu_ctx_synchronize: unsafe extern "C" fn() -> CUresult,
 }
 
 /// Process-wide driver + primary context. Serialized on a mutex.
@@ -119,6 +124,23 @@ fn load_fns(lib: &Library) -> Result<Fns, String> {
                 .map_err(|e| e.to_string())?,
             cu_launch_kernel: *lib.get(b"cuLaunchKernel\0").map_err(|e| e.to_string())?,
             cu_get_error_string: *lib.get(b"cuGetErrorString\0").map_err(|e| e.to_string())?,
+            cu_mem_alloc: *lib
+                .get(b"cuMemAlloc_v2\0")
+                .or_else(|_| lib.get(b"cuMemAlloc\0"))
+                .map_err(|e| e.to_string())?,
+            cu_mem_free: *lib
+                .get(b"cuMemFree_v2\0")
+                .or_else(|_| lib.get(b"cuMemFree\0"))
+                .map_err(|e| e.to_string())?,
+            cu_memcpy_htod: *lib
+                .get(b"cuMemcpyHtoD_v2\0")
+                .or_else(|_| lib.get(b"cuMemcpyHtoD\0"))
+                .map_err(|e| e.to_string())?,
+            cu_memcpy_dtoh: *lib
+                .get(b"cuMemcpyDtoH_v2\0")
+                .or_else(|_| lib.get(b"cuMemcpyDtoH\0"))
+                .map_err(|e| e.to_string())?,
+            cu_ctx_synchronize: *lib.get(b"cuCtxSynchronize\0").map_err(|e| e.to_string())?,
         })
     }
 }
@@ -269,6 +291,78 @@ pub fn launch_module(
             return Err(BridgeError::Launch {
                 kernel: kernel.into(),
                 message: err_string(&state.fns, r),
+            });
+        }
+        let r = (state.fns.cu_ctx_synchronize)();
+        if r != CUDA_SUCCESS {
+            return Err(BridgeError::Launch {
+                kernel: kernel.into(),
+                message: format!("cuCtxSynchronize: {}", err_string(&state.fns, r)),
+            });
+        }
+        Ok(())
+    })
+}
+
+/// Allocate `bytes` on the current context. Returns `CUdeviceptr` as `u64`.
+pub fn mem_alloc(bytes: usize) -> Result<u64, BridgeError> {
+    if bytes == 0 {
+        return Err(BridgeError::InvalidModule {
+            reason: "device_alloc: zero bytes".into(),
+        });
+    }
+    with_driver(|state| unsafe {
+        let mut ptr: CUdeviceptr = 0;
+        let r = (state.fns.cu_mem_alloc)(&raw mut ptr, bytes);
+        if r != CUDA_SUCCESS {
+            return Err(BridgeError::Device {
+                ordinal: 0,
+                message: format!("cuMemAlloc({bytes}): {}", err_string(&state.fns, r)),
+            });
+        }
+        Ok(ptr)
+    })
+}
+
+/// Free a device pointer from [`mem_alloc`].
+pub fn mem_free(ptr: u64) -> Result<(), BridgeError> {
+    if ptr == 0 {
+        return Ok(());
+    }
+    with_driver(|state| unsafe {
+        let r = (state.fns.cu_mem_free)(ptr);
+        if r != CUDA_SUCCESS {
+            return Err(BridgeError::Device {
+                ordinal: 0,
+                message: format!("cuMemFree: {}", err_string(&state.fns, r)),
+            });
+        }
+        Ok(())
+    })
+}
+
+/// Host → device copy.
+pub fn memcpy_htod(dst: u64, src: &[u8]) -> Result<(), BridgeError> {
+    with_driver(|state| unsafe {
+        let r = (state.fns.cu_memcpy_htod)(dst, src.as_ptr().cast(), src.len());
+        if r != CUDA_SUCCESS {
+            return Err(BridgeError::Device {
+                ordinal: 0,
+                message: format!("cuMemcpyHtoD: {}", err_string(&state.fns, r)),
+            });
+        }
+        Ok(())
+    })
+}
+
+/// Device → host copy.
+pub fn memcpy_dtoh(dst: &mut [u8], src: u64) -> Result<(), BridgeError> {
+    with_driver(|state| unsafe {
+        let r = (state.fns.cu_memcpy_dtoh)(dst.as_mut_ptr().cast(), src, dst.len());
+        if r != CUDA_SUCCESS {
+            return Err(BridgeError::Device {
+                ordinal: 0,
+                message: format!("cuMemcpyDtoH: {}", err_string(&state.fns, r)),
             });
         }
         Ok(())

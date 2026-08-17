@@ -27,7 +27,10 @@ mod ptx;
 #[cfg(feature = "cuda")]
 mod cuda_loader;
 
-pub use api::{launch, load_cubin, load_ptx, LaunchSpec, LoadedModule};
+pub use api::{
+    device_alloc, device_free, launch, load_cubin, load_ptx, memcpy_dtoh, memcpy_htod, LaunchSpec,
+    LoadedModule,
+};
 pub use args::KernelArg;
 pub use catalog::{lookup, KernelEntry, KernelHome, KERNEL_CATALOG};
 pub use error::BridgeError;

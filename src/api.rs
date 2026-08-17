@@ -165,6 +165,58 @@ pub fn launch(module: &LoadedModule, spec: &LaunchSpec<'_>) -> Result<(), Bridge
     }
 }
 
+/// Allocate device memory. Requires `--features cuda` and a live device.
+pub fn device_alloc(bytes: usize) -> Result<u64, BridgeError> {
+    #[cfg(feature = "cuda")]
+    {
+        crate::cuda_loader::mem_alloc(bytes)
+    }
+    #[cfg(not(feature = "cuda"))]
+    {
+        let _ = bytes;
+        Err(BridgeError::NotReady)
+    }
+}
+
+/// Free a pointer from [`device_alloc`].
+pub fn device_free(ptr: u64) -> Result<(), BridgeError> {
+    #[cfg(feature = "cuda")]
+    {
+        crate::cuda_loader::mem_free(ptr)
+    }
+    #[cfg(not(feature = "cuda"))]
+    {
+        let _ = ptr;
+        Err(BridgeError::NotReady)
+    }
+}
+
+/// Copy host bytes onto a device pointer.
+pub fn memcpy_htod(dst: u64, src: &[u8]) -> Result<(), BridgeError> {
+    #[cfg(feature = "cuda")]
+    {
+        crate::cuda_loader::memcpy_htod(dst, src)
+    }
+    #[cfg(not(feature = "cuda"))]
+    {
+        let _ = (dst, src);
+        Err(BridgeError::NotReady)
+    }
+}
+
+/// Copy device bytes onto a host buffer.
+pub fn memcpy_dtoh(dst: &mut [u8], src: u64) -> Result<(), BridgeError> {
+    #[cfg(feature = "cuda")]
+    {
+        crate::cuda_loader::memcpy_dtoh(dst, src)
+    }
+    #[cfg(not(feature = "cuda"))]
+    {
+        let _ = (dst, src);
+        Err(BridgeError::NotReady)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

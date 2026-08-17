@@ -13,7 +13,9 @@ Commits: Conventional Commits via Commitizen (`.cz.toml`).
 - Phase 1 CUDA driver loader behind `--features cuda` (`libloading` + `libcuda`).
 - `KernelArg` (device pointers as `u64`, no host `*const T`).
 - PTX / CUBIN shape checks (`validate_ptx` requires `.version`).
-- `KERNEL_CATALOG` — Python Unsloth files → CustomOp vs this crate vs out-of-scope.
+- `device_alloc` / `device_free` / `memcpy_htod` / `memcpy_dtoh` (cuda feature).
+- `precompiled/identity_f32.ptx` + `tests/identity_smoke.rs`.
+- `scripts/compile_unsloth_fa.py` + `docs/GROK_BUILD_CLI.md` for the 5080 job.
 - `BridgeError::is_fail_env()` — no libcuda / no device is **FAIL_ENV**, not green.
 
 ### Changed
