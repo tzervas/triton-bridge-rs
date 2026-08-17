@@ -7,6 +7,16 @@ Commits: Conventional Commits via Commitizen (`.cz.toml`).
 
 ## [Unreleased]
 
+### Added
+- `scripts/compile_unsloth_fa.py` now calls `triton.compile` on a discovered
+  Unsloth FA fwd JIT (does not vendor Unsloth `.py`). Missing unsloth → `FAIL_ENV`.
+- `tests/flash_fwd_mae.rs`: device-pointer launch vs Candle-compatible softmax
+  (MAE &lt; 1e-5, seq 128/512). Missing PTX is `FAIL_ENV`, not a green MAE.
+
+### Honesty
+- Host GPU is SM 12.0 (5080). `--sm 90` PTX is a compile target, not a
+  launch guarantee on this card. No invented PTX. No unsloth-rs dependency.
+
 ## [0.2.0] - 2026-08-17
 
 ### Added

@@ -10,7 +10,7 @@ they go.” Update when Python Unsloth moves files. Paths are approximate
 | `rope_embedding.py` | RoPE apply | `unsloth-rs` `custom_op::rope` | CustomOp landed (P1b) |
 | `swiglu.py` / `geglu` | `silu(gate)*up` | `unsloth-rs` `custom_op::swiglu` | CustomOp landed (P1c) |
 | `cross_entropy_loss.py` | chunked CE | `unsloth-rs` `custom_op::ce` | CustomOp landed (P1a); fused linear+CE still open |
-| `flash_attention_2.py` / FA3 | tiled attention | **this crate Phase 1** then unsloth-rs CustomOp | **Gap** — CubeCL path D2H; default now Candle (O(S²)) |
+| `flash_attention_2.py` / FA3 | tiled attention | **this crate Phase 1** then unsloth-rs CustomOp | **Gap** — current Unsloth **main** has no `flash_attention_2.py` (flex_attention is torch.compile, not a Triton JIT). CubeCL path D2H; default now Candle (O(S²)) |
 | `fast_lora.py` | fused LoRA add | peft-rs (consume unsloth, don’t fork) | Not started |
 | `qK_dot` / `fast_linear` | fused GEMM+scale | unsloth-rs later; or CUBIN here | Not started |
 | `flex_attention` / packing | ragged / packed | axolotl-rs + RoPE gather | RoPE `position_ids` still unused |
