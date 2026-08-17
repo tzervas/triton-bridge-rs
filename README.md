@@ -1,91 +1,84 @@
 # triton-bridge-rs
 
-**Temporary** bridge between OpenAI Triton (and precompiled PTX/CUBIN) and the
-tzervas Rust LLM stack. **Not** a product port of Triton. **Not** Unsloth.
-**Not** ready to compile Python `@triton.jit` kernels.
+**0.1 contract** for a Triton / PTX launch bridge. **Not** a Triton port.
+**Not** Unsloth. **`bridge_ready()` is `false`.**
 
+[![CI](https://github.com/tzervas/triton-bridge-rs/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/tzervas/triton-bridge-rs/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![semver](https://img.shields.io/badge/semver-0.x-orange.svg)](.cz.toml)
+
+```toml
+triton-bridge = "0.1"
+```
+
+```rust
+use triton_bridge::{bridge_ready, load_ptx};
+
+assert!(!bridge_ready());
+assert!(load_ptx("flash", ".version 8.0\n", Some(90)).unwrap_err().is_not_ready());
+```
 
 ## Why this repo exists
 
-Python Unsloth (and a lot of other training kernels) are written in
-[Triton](https://github.com/triton-lang/triton). The Rust fleet
-([unsloth-rs](https://github.com/tzervas/unsloth-rs), axolotl-rs, peft-rs)
-needs those **algorithms** without a permanent Python runtime.
+Python Unsloth kernels are written in [Triton](https://github.com/triton-lang/triton).
+The Rust fleet ([unsloth-rs](https://github.com/tzervas/unsloth-rs), axolotl-rs,
+peft-rs) needs those **algorithms** without a permanent Python runtime.
 
-Two different jobs got conflated in planning:
+| Job | Where | 0.1.0 status |
+|-----|--------|----------------|
+| Transformer **ops** | **unsloth-rs** `CustomOp*` | Device-resident on Candle storage |
+| **Compile / load / launch** foreign GPU kernels | **this crate** | API exists; implementation does not |
 
-| Job | Where it lives | Status |
-|-----|----------------|--------|
-| Transformer **ops** (RMSNorm, RoPE, CE, attention) | **unsloth-rs** Candle `CustomOp*` | Shipping on `CudaStorage` (no CubeCL `to_vec1`) |
-| **Compile / load / launch** foreign GPU kernels (what Triton *the compiler* does) | **this crate** | Scaffold + contract only |
+`tritter-accel` is the **opposite** direction (Rust → Python). Do not merge.
 
-Putting a Python/Triton FFI inside `unsloth-rs` would:
-
-- pull CPython / libtriton into a kernel library
-- invert the DAG (kernels depending on a compiler runtime)
-- block consumers who only want `CustomOp` RMSNorm
-
-`tritter-accel` is the **opposite** direction (Rust → Python via PyO3 for
-BitNet/VSA). Do not merge this into that crate.
-
-## Honest status (2026-08-17)
+## Honest status
 
 | Surface | State |
 |---------|--------|
-| Crate compiles | ✅ stub (`triton_bridge`) |
-| Load PTX/CUBIN + launch | ❌ Phase 1 — [issue #3](https://github.com/tzervas/triton-bridge-rs/issues/3) |
-| CPython / libtriton FFI | ❌ Phase 2 — [issue #4](https://github.com/tzervas/triton-bridge-rs/issues/4) |
-| Native Rust kernel DSL (“Rust Triton”) | ❌ Phase 3 — [issue #5](https://github.com/tzervas/triton-bridge-rs/issues/5) |
-| Host-roundtrip Candle↔CubeCL | **Out of scope** — that is unsloth-rs G0 (`CustomOp`) |
+| Crate compiles / crates.io-shaped | ✅ `0.1.0` contract |
+| `load_ptx` / `load_cubin` / `launch` | Validates args, then [`NotReady`](https://docs.rs/triton-bridge) |
+| Features `cuda`, `python` | **Reserved no-ops.** They do not load CUDA or Python. They do not flip `bridge_ready()`. |
+| Real PTX launch | ❌ [issue #3](https://github.com/tzervas/triton-bridge-rs/issues/3) — needs a GPU |
+| CPython / `triton.compile` | ❌ [issue #4](https://github.com/tzervas/triton-bridge-rs/issues/4) |
+| Native Rust kernel DSL | ❌ [issue #5](https://github.com/tzervas/triton-bridge-rs/issues/5) |
 
-`bridge_ready()` is **`false`**. Do not depend on this crate for throughput.
+Do not depend on this crate for throughput. unsloth-rs must not take a
+**hard** dependency until Phase 1 loads a real module.
+
+## SemVer (0.x)
+
+Commitizen: [`.cz.toml`](.cz.toml). `major_version_zero = true` — breaking
+changes bump **minor**. 1.0.0 is not automatic.
+
+```bash
+cz bump --increment MINOR   # after a feat
+cz bump --increment PATCH   # after a fix
+git push origin main --follow-tags
+```
 
 ## Phases
 
-See [ROADMAP.md](ROADMAP.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+See [ROADMAP.md](ROADMAP.md). Phase 1 (precompiled CUBIN + device-pointer
+launch, **no** CPython) is the useful temporary bridge.
+
+GPU work happens on the workstation 5080, not in CI. Handoff:
+[docs/GPU_HANDOFF.md](docs/GPU_HANDOFF.md).
+
+## Consumer contract
 
 ```text
-Phase 0  honesty stub (this commit)
-   │
-Phase 1  load precompiled PTX/CUBIN via cudarc — no Python
-   │     (offline: compile Unsloth Triton kernels once, check in CUBIN)
-   │
-Phase 2  optional `python` feature: FFI to Triton's compiler
-   │     (temporary; requires a Python env; not the deploy target)
-   │
-Phase 3  native Rust kernel DSL + NVRTC/PTX
-         spin out to its own crate if it grows a compiler
-```
-
-Phase 1 is the useful temporary bridge: **algorithms from Triton, launch from
-Rust, no CPython in the training process.**
-
-## Consumer contract (unsloth-rs)
-
-```text
-unsloth-rs  ──CustomOp / NVRTC──►  CudaStorage   (default, device-resident)
+unsloth-rs  ──CustomOp / NVRTC──►  CudaStorage   (default)
      │
-     └──optional──►  triton-bridge-rs  (precompiled PTX only, when a
-                    Triton kernel is not yet rewritten as CustomOp)
+     └──optional, after bridge_ready()──►  this crate
 ```
-
-unsloth-rs **must not** take a hard dependency on this crate until Phase 1
-loads a real module. Tracked in unsloth-rs #87.
-
-## Non-goals
-
-- Replacing Candle or CubeCL
-- Shipping a Python interpreter inside axolotl-rs
-- Claiming Unsloth 2× / 70% VRAM numbers
-- Ternary / VSA / BitNet (tritter-accel, trit-vsa, bitnet-quantize)
 
 ## Docs
 
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — FFI options and why
-- [docs/PYTHON_UNSLOTH_KERNEL_MAP.md](docs/PYTHON_UNSLOTH_KERNEL_MAP.md) — which Python kernels map where
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- [docs/PYTHON_UNSLOTH_KERNEL_MAP.md](docs/PYTHON_UNSLOTH_KERNEL_MAP.md)
 - [docs/WHY_SEPARATE_REPO.md](docs/WHY_SEPARATE_REPO.md)
-- [ROADMAP.md](ROADMAP.md) · [DEBT.md](DEBT.md)
+- [docs/REVIEW_0_1.md](docs/REVIEW_0_1.md) — adversarial review of 0.0.1
+- [CONTRIBUTING.md](CONTRIBUTING.md) · [DEBT.md](DEBT.md)
 
 ## License
 

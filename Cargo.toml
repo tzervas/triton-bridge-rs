@@ -1,29 +1,40 @@
 [package]
 name = "triton-bridge"
-version = "0.0.1"
+version = "0.1.0"
 edition = "2021"
 rust-version = "1.85"
 license = "MIT"
-description = "Temporary Triton/PTX launch bridge for the tzervas Rust LLM stack. Stub: bridge_ready() is false."
+description = "0.1 contract for a Triton/PTX launch bridge. bridge_ready() is false. Not a Triton port."
 authors = ["Tyler Zervas <tz-dev@vectorweight.com>"]
 repository = "https://github.com/tzervas/triton-bridge-rs"
 homepage = "https://github.com/tzervas/triton-bridge-rs"
+documentation = "https://docs.rs/triton-bridge"
 readme = "README.md"
-keywords = ["cuda", "triton", "ptx", "gpu", "kernels"]
+keywords = ["cuda", "ptx", "gpu", "kernels", "ffi"]
 categories = ["science"]
-exclude = [".github/"]
+exclude = [".github/", "docs/REVIEW_0_1.md"]
 
 [features]
 default = []
-# Phase 1: cudarc / Candle CUDA module load. Off until implemented.
+# Reserved for Phase 1 (cudarc / module load). Does NOT load CUDA in 0.1.0.
+# Does NOT flip bridge_ready() to true.
 cuda = []
-# Phase 2: in-process CPython + triton.compile. Off. Prefer offline scripts.
+# Reserved for Phase 2 (optional CPython compile). Does NOT embed Python in 0.1.0.
 python = []
 
 [dependencies]
 
 [lints.rust]
+# Phase 1 `cuda` will need a tiny unsafe window for driver pointers.
+# 0.1.0 has no such code; keep forbid so we cannot sneak it in early.
 unsafe_code = "forbid"
+missing_docs = "warn"
 
 [lints.clippy]
-pedantic = "warn"
+pedantic = { level = "warn", priority = -1 }
+missing_errors_doc = "allow"
+module_name_repetitions = "allow"
+
+[package.metadata.commitizen]
+# Source of truth is .cz.toml; this is a reminder for `cargo` users.
+semver = "0.x"

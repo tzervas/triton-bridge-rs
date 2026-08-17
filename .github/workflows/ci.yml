@@ -3,11 +3,34 @@ on:
   push:
     branches: [main]
   pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-D warnings"
+
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - run: cargo test --all-features
-      - run: cargo clippy --all-targets -- -D warnings
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.85"
+          components: rustfmt, clippy
+      - name: fmt
+        run: cargo fmt --all -- --check
+      - name: clippy (default)
+        run: cargo clippy --all-targets -- -D warnings
+      - name: clippy (all features)
+        run: cargo clippy --all-targets --all-features -- -D warnings
+      - name: test default
+        run: cargo test
+      - name: test all features (ready must stay false)
+        run: cargo test --all-features
+      - name: package dry-run
+        run: cargo package --allow-dirty --no-verify
+
+  msrv-note:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "MSRV is 1.85 (Cargo.toml rust-version). GPU jobs are not in this workflow; see docs/GPU_HANDOFF.md."
