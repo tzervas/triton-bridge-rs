@@ -7,6 +7,25 @@ Commits: Conventional Commits via Commitizen (`.cz.toml`).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-17
+
+### Added
+- Phase 1 CUDA driver loader behind `--features cuda` (`libloading` + `libcuda`).
+- `KernelArg` (device pointers as `u64`, no host `*const T`).
+- PTX / CUBIN shape checks (`validate_ptx` requires `.version`).
+- `KERNEL_CATALOG` — Python Unsloth files → CustomOp vs this crate vs out-of-scope.
+- `BridgeError::is_fail_env()` — no libcuda / no device is **FAIL_ENV**, not green.
+
+### Changed
+- `bridge_ready()` is a **runtime** function. True only with `cuda` + driver + device.
+- `LaunchSpec` gained `args`. Breaking for struct literals (0.x minor bump).
+
+### Honesty
+- Default features still do not link CUDA (`NotReady`).
+- `cuda` feature on a CPU box returns `Device { FAIL_ENV }` — never a silent pass.
+- First real payload remains Flash Attention CUBIN on the 5080 (see GPU_HANDOFF).
+- unsloth-rs still must not hard-depend on this crate for default math.
+
 ## [0.1.0] - 2026-08-17
 
 ### Added
@@ -23,5 +42,6 @@ Commits: Conventional Commits via Commitizen (`.cz.toml`).
 - `bridge_ready()` is **false**. Features `cuda` / `python` are reserved no-ops.
 - This is not a Triton compiler and not an Unsloth product.
 
-[Unreleased]: https://github.com/tzervas/triton-bridge-rs/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/tzervas/triton-bridge-rs/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/tzervas/triton-bridge-rs/releases/tag/v0.2.0
 [0.1.0]: https://github.com/tzervas/triton-bridge-rs/releases/tag/v0.1.0

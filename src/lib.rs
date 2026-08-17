@@ -1,39 +1,54 @@
 // SPDX-License-Identifier: MIT
 // Copyright 2026 Tyler Zervas
 
-//! Temporary Triton / PTX launch **contract**.
+//! Triton / PTX launch **bridge**.
 //!
-//! This crate is **0.1.x**: the public API is real, the implementation is not.
-//! [`bridge_ready`] is `false`. [`load_ptx`], [`load_cubin`], and [`launch`]
-//! validate arguments and then return [`BridgeError::NotReady`].
-//!
-//! unsloth-rs must keep using Candle `CustomOp*` as the default. This crate
-//! is the future home of *foreign* kernel load/launch, not transformer math.
+//! * **0.2** implements Phase 1: CUDA driver load/launch behind `--features cuda`.
+//! * Default features still do **not** link CUDA. [`bridge_ready`] is then `false`.
+//! * unsloth-rs keeps Candle `CustomOp*` as the default math path. This crate
+//!   is for *foreign* kernels (Flash Attention CUBIN first), not RMS/RoPE/CE.
 //!
 //! ```
 //! use triton_bridge::{bridge_ready, load_ptx};
-//! assert!(!bridge_ready());
-//! assert!(load_ptx("flash", ".version 8.0\n", Some(90)).is_err());
+//! if !bridge_ready() {
+//!     assert!(load_ptx("flash", ".version 8.0\n", Some(90)).is_err());
+//! }
 //! ```
 
+#![cfg_attr(not(feature = "cuda"), forbid(unsafe_code))]
 #![warn(missing_docs)]
 
 mod api;
+mod args;
+mod catalog;
 mod error;
+mod ptx;
+
+#[cfg(feature = "cuda")]
+mod cuda_loader;
 
 pub use api::{launch, load_cubin, load_ptx, LaunchSpec, LoadedModule};
+pub use args::KernelArg;
+pub use catalog::{lookup, KernelEntry, KernelHome, KERNEL_CATALOG};
 pub use error::BridgeError;
 
 /// Semantic crate version (same as `Cargo.toml`).
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// `false` until Phase 1 can load PTX/CUBIN and launch on a device pointer.
+/// `true` only when the `cuda` feature is on **and** the driver sees a device.
 ///
-/// Callers (unsloth-rs, axolotl) **must** branch on this. Enabling the
-/// `cuda` or `python` cargo features does **not** flip this to `true`.
+/// Enabling the `cuda` Cargo feature on a CPU box does **not** flip this.
+/// Enabling `python` never flips this.
 #[must_use]
-pub const fn bridge_ready() -> bool {
-    false
+pub fn bridge_ready() -> bool {
+    #[cfg(feature = "cuda")]
+    {
+        cuda_loader::driver_ready()
+    }
+    #[cfg(not(feature = "cuda"))]
+    {
+        false
+    }
 }
 
 /// Phase 2 `python` feature is compiled in. Still does **not** mean ready.
@@ -42,7 +57,7 @@ pub const fn python_feature_enabled() -> bool {
     cfg!(feature = "python")
 }
 
-/// CUDA launch feature is compiled in. Still does **not** mean ready.
+/// CUDA launch feature is compiled in. Still does **not** mean a device exists.
 #[must_use]
 pub const fn cuda_feature_enabled() -> bool {
     cfg!(feature = "cuda")
@@ -50,8 +65,12 @@ pub const fn cuda_feature_enabled() -> bool {
 
 /// Why [`bridge_ready`] is false (stable string for logs / issues).
 #[must_use]
-pub const fn not_ready_reason() -> &'static str {
-    "0.1 contract: no PTX/CUBIN loader, no Triton FFI. See tzervas/triton-bridge-rs#3"
+pub fn not_ready_reason() -> &'static str {
+    if cfg!(feature = "cuda") {
+        "0.2 cuda feature: driver missing, no device, or cuInit failed (FAIL_ENV). See tzervas/triton-bridge-rs#3"
+    } else {
+        "0.2 default: no CUDA driver linked. Build with --features cuda on a machine with libcuda."
+    }
 }
 
 /// Names this crate must never depend on (leaf rule, issue #7).
@@ -68,18 +87,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn honesty_default_and_features() {
-        assert!(!bridge_ready());
+    fn honesty_default_features() {
         assert_eq!(VERSION, env!("CARGO_PKG_VERSION"));
         assert!(VERSION.starts_with("0."));
-        // Features may be on in `--all-features` CI. Ready must stay false.
+        if !cuda_feature_enabled() {
+            assert!(!bridge_ready());
+        }
         let _ = python_feature_enabled();
-        let _ = cuda_feature_enabled();
-        assert!(!bridge_ready());
     }
 
     #[test]
-    fn error_display_not_ready() {
+    fn error_display_mentions_bridge() {
         let s = BridgeError::NotReady.to_string();
         assert!(s.contains("not ready"), "{s}");
     }
@@ -94,7 +112,6 @@ mod tests {
     fn cargo_toml_has_no_forbidden_deps() {
         let toml = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml"));
         for name in FORBIDDEN_DEP_PREFIXES {
-            // Naive but good enough: a dep line would be `name =`
             let needle = format!("{name} =");
             assert!(
                 !toml.contains(&needle),
