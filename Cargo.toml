@@ -1,0 +1,29 @@
+[package]
+name = "triton-bridge"
+version = "0.0.1"
+edition = "2021"
+rust-version = "1.85"
+license = "MIT"
+description = "Temporary Triton/PTX launch bridge for the tzervas Rust LLM stack. Stub: bridge_ready() is false."
+authors = ["Tyler Zervas <tz-dev@vectorweight.com>"]
+repository = "https://github.com/tzervas/triton-bridge-rs"
+homepage = "https://github.com/tzervas/triton-bridge-rs"
+readme = "README.md"
+keywords = ["cuda", "triton", "ptx", "gpu", "kernels"]
+categories = ["science"]
+exclude = [".github/"]
+
+[features]
+default = []
+# Phase 1: cudarc / Candle CUDA module load. Off until implemented.
+cuda = []
+# Phase 2: in-process CPython + triton.compile. Off. Prefer offline scripts.
+python = []
+
+[dependencies]
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+pedantic = "warn"
