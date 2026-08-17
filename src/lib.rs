@@ -1,23 +1,36 @@
 // SPDX-License-Identifier: MIT
 // Copyright 2026 Tyler Zervas
 
-//! Temporary Triton / PTX launch bridge.
+//! Temporary Triton / PTX launch **contract**.
 //!
-//! This crate is a **contract + stub**. [`bridge_ready`] is `false` until
-//! Phase 1 loads a real module (see repo `ROADMAP.md`).
+//! This crate is **0.1.x**: the public API is real, the implementation is not.
+//! [`bridge_ready`] is `false`. [`load_ptx`], [`load_cubin`], and [`launch`]
+//! validate arguments and then return [`BridgeError::NotReady`].
 //!
 //! unsloth-rs must keep using Candle `CustomOp*` as the default. This crate
 //! is the future home of *foreign* kernel load/launch, not transformer math.
+//!
+//! ```
+//! use triton_bridge::{bridge_ready, load_ptx};
+//! assert!(!bridge_ready());
+//! assert!(load_ptx("flash", ".version 8.0\n", Some(90)).is_err());
+//! ```
 
 #![warn(missing_docs)]
 
-/// Semantic crate version (keep in sync with `Cargo.toml`).
+mod api;
+mod error;
+
+pub use api::{launch, load_cubin, load_ptx, LaunchSpec, LoadedModule};
+pub use error::BridgeError;
+
+/// Semantic crate version (same as `Cargo.toml`).
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// `false` until Phase 1 can load PTX/CUBIN and launch on a device pointer.
 ///
-/// Callers (unsloth-rs, axolotl) **must** branch on this instead of assuming
-/// a Triton runtime exists.
+/// Callers (unsloth-rs, axolotl) **must** branch on this. Enabling the
+/// `cuda` or `python` cargo features does **not** flip this to `true`.
 #[must_use]
 pub const fn bridge_ready() -> bool {
     false
@@ -38,44 +51,55 @@ pub const fn cuda_feature_enabled() -> bool {
 /// Why [`bridge_ready`] is false (stable string for logs / issues).
 #[must_use]
 pub const fn not_ready_reason() -> &'static str {
-    "Phase 0 stub: no PTX/CUBIN loader, no Triton FFI. See tzervas/triton-bridge-rs#1"
+    "0.1 contract: no PTX/CUBIN loader, no Triton FFI. See tzervas/triton-bridge-rs#3"
 }
 
-/// Error type for future load/launch APIs.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum BridgeError {
-    /// Called an API that does not exist yet.
-    NotImplemented(&'static str),
-}
-
-impl std::fmt::Display for BridgeError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::NotImplemented(msg) => write!(f, "triton-bridge: {msg}"),
-        }
-    }
-}
-
-impl std::error::Error for BridgeError {}
-
-/// Placeholder so the public surface is obvious. Always [`BridgeError::NotImplemented`].
-///
-/// # Errors
-///
-/// Always. Phase 1 will take PTX bytes + a device ordinal.
-pub fn load_ptx(_name: &str, _ptx: &str) -> Result<(), BridgeError> {
-    Err(BridgeError::NotImplemented(not_ready_reason()))
-}
+/// Names this crate must never depend on (leaf rule, issue #7).
+pub const FORBIDDEN_DEP_PREFIXES: &[&str] = &[
+    "peft-rs",
+    "qlora-rs",
+    "axolotl-rs",
+    "rust-ai-core",
+    "unsloth-rs",
+];
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn honesty() {
+    fn honesty_default_and_features() {
         assert!(!bridge_ready());
-        assert!(!python_feature_enabled());
-        assert!(!cuda_feature_enabled());
-        assert!(load_ptx("x", "").is_err());
+        assert_eq!(VERSION, env!("CARGO_PKG_VERSION"));
+        assert!(VERSION.starts_with("0."));
+        // Features may be on in `--all-features` CI. Ready must stay false.
+        let _ = python_feature_enabled();
+        let _ = cuda_feature_enabled();
+        assert!(!bridge_ready());
+    }
+
+    #[test]
+    fn error_display_not_ready() {
+        let s = BridgeError::NotReady.to_string();
+        assert!(s.contains("not ready"), "{s}");
+    }
+
+    #[test]
+    fn leaf_prefixes_are_listed() {
+        assert!(FORBIDDEN_DEP_PREFIXES.contains(&"peft-rs"));
+        assert!(FORBIDDEN_DEP_PREFIXES.contains(&"unsloth-rs"));
+    }
+
+    #[test]
+    fn cargo_toml_has_no_forbidden_deps() {
+        let toml = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml"));
+        for name in FORBIDDEN_DEP_PREFIXES {
+            // Naive but good enough: a dep line would be `name =`
+            let needle = format!("{name} =");
+            assert!(
+                !toml.contains(&needle),
+                "leaf rule: Cargo.toml must not depend on {name}"
+            );
+        }
     }
 }

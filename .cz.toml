@@ -1,0 +1,21 @@
+# Commitizen (commitizen-tools) — Conventional Commits + 0.x SemVer.
+# Install:  uv tool install commitizen  OR  pipx install commitizen
+#
+# Bump (from main, after CI is green):
+#   cz bump --increment PATCH|MINOR   # or: cz bump (reads feat/fix)
+#   git push origin main --follow-tags
+#
+# major_version_zero = true → BREAKING under 0.x bumps MINOR, never auto-1.0.0.
+
+[tool.commitizen]
+name = "cz_conventional_commits"
+version = "0.1.0"
+tag_format = "v$version"
+version_scheme = "semver"
+version_files = [
+    "Cargo.toml:^version",
+]
+update_changelog_on_bump = true
+major_version_zero = true
+changelog_file = "CHANGELOG.md"
+changelog_incremental = true
