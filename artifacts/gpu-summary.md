@@ -8,7 +8,7 @@ Sanitized (no hostname, no home paths, no tokens, no `nvidia-smi -q`).
 |-----|--------|-------|
 | A identity PTX launch | **PASS** | `identity_f32` bit-exact copy |
 | B unsloth-rs CustomOp CUDA gates | **PASS** | RMS / RoPE / SwiGLU / CE / `attention_device` |
-| C Unsloth FA CUBIN + MAE | compile **FAIL**, launch **SKIP** | unsloth missing; no PTX written; `device_pointers=false` |
+| C Unsloth FA CUBIN + MAE | compile **FAIL_ENV**, launch **SKIP** | persist-volume Unsloth 2026.8.18 imported; no FA Triton JIT; no PTX written; `device_pointers=false` |
 
 ## Environment
 
@@ -22,25 +22,30 @@ Sanitized (no hostname, no home paths, no tokens, no `nvidia-smi -q`).
 | Python | 3.13.5 (system) |
 | torch | 2.10.0+cu128, `cuda=True`, capability `(12, 0)` |
 | triton | 3.6.0 |
-| unsloth (Python) | **missing** (`ModuleNotFoundError: No module named 'unsloth'`) |
+| unsloth (Python) | **2026.8.18** in compare persist volume (`unsloth-rs-compare-site`). Host workstation venv still has no unsloth. |
 | `bridge_ready()` | **true** (Job A load + launch on device pointers) |
 | Arch pin | `CUDA_COMPUTE_CAP=90` (host is SM 12.0; sm90 is a compile target, not a launch guarantee) |
 
 ## First error
 
-Job C, exit 2:
+Job C container retry, exit 2 (2026-08-17):
 
 ```text
-FAIL_ENV: need unsloth in the workstation venv
-  (torch+triton present; unsloth missing: No module named 'unsloth')
+./scripts/compile_unsloth_fa_container.sh
+HONEST: host GPU is SM 12.0; --sm 90 is a compile target, not a launch guarantee.
+triton 3.6.0 torch 2.11.0+cu130 sm=90
+host gpu='NVIDIA GeForce RTX 5080' compute_capability=12.0
+lookup tried:
+  unsloth.kernels.flash_attention_2 (No module named ...)
+  unsloth.kernels.flex_attention (imported; jit=none)
+  unsloth_zoo.flex_attention (imported; jit=none)
+FAIL_ENV: no Apache-2.0 Unsloth FA fwd JIT kernel found.
+Current unsloth.kernels has no flash_attention_2.py
+(flex_attention is torch.compile, not a Triton JIT).
+Refusing to invent PTX.
 ```
 
-Preceded by the honesty line:
-
-```text
-HONEST: host SM is 12.0; compiling for sm90. sm90 PTX may not be the
-right binary to launch on SM 12.0 (5080).
-```
+Earlier host-venv attempt was also FAIL_ENV (`unsloth` missing). Persist-volume import is no longer the blocker.
 
 ## Job A — PASS
 
@@ -50,19 +55,20 @@ right binary to launch on SM 12.0 (5080).
 
 `CUDA_COMPUTE_CAP=90 cargo test --features cuda` on unsloth-rs `feat/p1-rope-ids-fused-ce`. CustomOp CUDA gates passed. CubeCL FA is not the default. No 2× / 70% VRAM claims from this job.
 
-## Job C — compile FAIL, launch SKIP
+## Job C — compile FAIL_ENV, launch SKIP (container + persist volume)
 
 Command:
 
 ```text
-CUDA_COMPUTE_CAP=90 python scripts/compile_unsloth_fa.py \
-  --out precompiled/sm90_flash_fwd.ptx --sm 90
+CUDA_COMPUTE_CAP=90 ./scripts/compile_unsloth_fa_container.sh \
+  precompiled/sm90_flash_fwd.ptx
 ```
 
-- Compile: **FAIL** (exit 2). `triton.compile` never ran; Python `unsloth` is missing.
+- Unsloth **imported** (`2026.8.18` from named volume `unsloth-rs-compare-site`).
+- Compile: **FAIL_ENV** (exit 2). No Apache-2.0 FA fwd Triton JIT. `flex_attention` imported with `jit=none`. `triton.compile` never ran.
 - Launch: **SKIP** (no `precompiled/sm90_flash_fwd.ptx`).
 - `precompiled/NOTICE` was **not** added (compile produced no output).
-- Did **not** invent PTX. Did **not** `pip install unsloth`.
+- Did **not** invent PTX.
 - Current Unsloth **main** has no `flash_attention_2.py`; `flex_attention` is torch.compile, not a Triton JIT.
 
 Rust MAE gate (`tests/flash_fwd_mae.rs`, seq 128/512, f32, Candle-compatible softmax, MAE budget `1e-5`, `KernelArg::DevicePtr` only):

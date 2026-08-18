@@ -16,6 +16,9 @@ Commits: Conventional Commits via Commitizen (`.cz.toml`).
 ### Honesty
 - Host GPU is SM 12.0 (5080). `--sm 90` PTX is a compile target, not a
   launch guarantee on this card. No invented PTX. No unsloth-rs dependency.
+- Job C compare-container retry (2026-08-17): Unsloth 2026.8.18 imported
+  from `unsloth-rs-compare-site`. Still **FAIL_ENV** — no FA Triton JIT
+  (`flex_attention` is torch.compile). No PTX written. Launch SKIP.
 
 ## [0.2.0] - 2026-08-17
 
