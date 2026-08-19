@@ -1,10 +1,10 @@
 [package]
 name = "triton-bridge"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 rust-version = "1.85"
 license = "MIT"
-description = "0.1 contract for a Triton/PTX launch bridge. bridge_ready() is false. Not a Triton port."
+description = "Triton/PTX launch bridge. Default: contract only. --features cuda: libcuda load/launch. Not a Triton port."
 authors = ["Tyler Zervas <tz-dev@vectorweight.com>"]
 repository = "https://github.com/tzervas/triton-bridge-rs"
 homepage = "https://github.com/tzervas/triton-bridge-rs"
@@ -16,18 +16,17 @@ exclude = [".github/", "docs/REVIEW_0_1.md"]
 
 [features]
 default = []
-# Reserved for Phase 1 (cudarc / module load). Does NOT load CUDA in 0.1.0.
-# Does NOT flip bridge_ready() to true.
-cuda = []
-# Reserved for Phase 2 (optional CPython compile). Does NOT embed Python in 0.1.0.
+# Phase 1: link libcuda via libloading. Does NOT embed Python.
+# bridge_ready() is runtime-true only when a device exists.
+cuda = ["dep:libloading"]
+# Reserved for Phase 2 (optional CPython compile). Does NOT embed Python in 0.2.
 python = []
 
 [dependencies]
+libloading = { version = "0.8", optional = true }
 
 [lints.rust]
-# Phase 1 `cuda` will need a tiny unsafe window for driver pointers.
-# 0.1.0 has no such code; keep forbid so we cannot sneak it in early.
-unsafe_code = "forbid"
+# crate-level forbid is in lib.rs for !cuda; cuda_loader allows a tiny window.
 missing_docs = "warn"
 
 [lints.clippy]
@@ -36,5 +35,4 @@ missing_errors_doc = "allow"
 module_name_repetitions = "allow"
 
 [package.metadata.commitizen]
-# Source of truth is .cz.toml; this is a reminder for `cargo` users.
 semver = "0.x"

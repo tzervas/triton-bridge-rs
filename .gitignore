@@ -1,4 +1,5 @@
 /target
+unsloth_compiled_cache/
 Cargo.lock
 .idea
 .vscode

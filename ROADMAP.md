@@ -1,23 +1,24 @@
 # Roadmap
 
-## Phase 0 / 0.1.0 — contract (now)
+## Phase 0 / 0.1.0 — contract
 
 - [x] Repo, README, architecture, kernel map
-- [x] `bridge_ready() == false`
+- [x] `bridge_ready() == false` on default features
 - [x] Stable load/launch types (`LoadedModule`, `LaunchSpec`, `BridgeError`)
 - [x] No Python / CUDA implementation on the default feature set
 - [x] Commitizen 0.x, CHANGELOG, CI, GPU handoff
 - [x] Issues #1–#7
 
-## Phase 1 — precompiled launch (next real code, **needs GPU**)
+## Phase 1 — precompiled launch (0.2.0 — this PR)
 
-- [ ] `ModuleCache` over cudarc (or Candle `CudaDevice::get_or_load_custom_func`)
-- [ ] Load PTX string / CUBIN bytes
-- [ ] Launch with explicit grid/block/smem; device pointers only
-- [ ] One Flash Attention payload + numerical test vs Candle softmax
+- [x] Driver loader via `libloading` + `libcuda` (`--features cuda`)
+- [x] Load PTX string / CUBIN bytes (`cuModuleLoadData`)
+- [x] Launch with explicit grid/block/smem + `KernelArg` device pointers
+- [x] `FAIL_ENV` when libcuda / device missing (no silent pass)
+- [x] `bridge_ready()` runtime-true only with driver + device
+- [ ] One Flash Attention payload + numerical test vs Candle softmax (**5080**)
 - [ ] NOTICE for any Apache-2.0 Unsloth-derived PTX
-- [ ] Feature `cuda` actually links a loader; still does not embed Python
-- [ ] Flip `bridge_ready()` **only** when load+launch on a device pointer works
+- [ ] Flip documented “ready on CI” only after that numerical gate
 
 Hand off to the 5080 via [docs/GPU_HANDOFF.md](docs/GPU_HANDOFF.md).
 

@@ -1,0 +1,31 @@
+// SPDX-License-Identifier: MIT
+// Identity copy: out[i] = in[i] for i in 0..n (f32).
+// Smoke payload for triton-bridge Phase 1. Not Unsloth. Not FA.
+.version 8.0
+.target sm_90
+.address_size 64
+
+.visible .entry identity_f32(
+    .param .u64 in_ptr,
+    .param .u64 out_ptr,
+    .param .u32 n
+)
+{
+    .reg .pred  %p;
+    .reg .u32   %r<4>;
+    .reg .u64   %rd<6>;
+    .reg .f32   %f<2>;
+
+    ld.param.u64    %rd1, [in_ptr];
+    ld.param.u64    %rd2, [out_ptr];
+    ld.param.u32    %r1,  [n];
+    mov.u32         %r2,  %tid.x;
+    setp.ge.u32     %p,   %r2, %r1;
+    @%p ret;
+    mul.wide.u32    %rd3, %r2, 4;
+    add.u64         %rd4, %rd1, %rd3;
+    add.u64         %rd5, %rd2, %rd3;
+    ld.global.f32   %f1,  [%rd4];
+    st.global.f32   [%rd5], %f1;
+    ret;
+}
